@@ -1,0 +1,60 @@
+name: Build All Platforms
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone ImGui
+        run: git clone --depth 1 --branch v1.90.4 https://github.com/ocornut/imgui.git vendor/imgui
+      - name: Install SDL2
+        run: |
+          $sdlVer = "2.28.5"
+          $url = "https://github.com/libsdl-org/SDL/releases/download/release-$sdlVer/SDL2-devel-$sdlVer-VC.zip"
+          Invoke-WebRequest $url -OutFile sdl2.zip
+          Expand-Archive sdl2.zip -DestinationPath sdl2_extracted
+          Move-Item sdl2_extracted/SDL2-$sdlVer sdl2
+      - name: Configure CMake
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DSDL2_DIR="${{ github.workspace }}/sdl2/cmake"
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Copy SDL2 DLL
+        run: copy sdl2\lib\x64\SDL2.dll build\Release\SDL2.dll
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: luau-unscrambler-windows
+          path: |
+            build/Release/luau-unscrambler.exe
+            build/Release/SDL2.dll
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get install -y libsdl2-dev
+      - run: git clone --depth 1 --branch v1.90.4 https://github.com/ocornut/imgui.git vendor/imgui
+      - run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --config Release -j$(nproc)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: luau-unscrambler-linux
+          path: build/luau-unscrambler
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install sdl2
+      - run: git clone --depth 1 --branch v1.90.4 https://github.com/ocornut/imgui.git vendor/imgui
+      - run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --config Release -j$(sysctl -n hw.ncpu)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: luau-unscrambler-macos
+          path: build/luau-unscrambler
